@@ -35,8 +35,13 @@ export class AgentService implements OnModuleInit {
     private initializeAgent() {
         const apiKey = this.configService.get<string>('GEMINI_API_KEY');
         if (!apiKey) {
-            this.logger.error('GEMINI_API_KEY is missing!');
-            throw new Error('GEMINI_API_KEY is not defined in environment variables');
+            this.logger.error('GEMINI_API_KEY is missing! Agent functionality will be disabled.');
+            return;
+        }
+
+        // Safety check for index
+        if (this.currentModelIndex >= this.MODELS.length) {
+            this.currentModelIndex = 0;
         }
 
         const modelName = this.MODELS[this.currentModelIndex];
@@ -126,6 +131,14 @@ export class AgentService implements OnModuleInit {
         const modelName = this.MODELS[this.currentModelIndex];
         this.logger.log(`Running agent | Session: ${sessionId} | Model: ${modelName} | Attempt: ${retryCount + 1}`);
 
+        if (!this.runner) {
+            // Try to re-init if runner is missing (e.g. startup failed)
+            this.initializeAgent();
+            if (!this.runner) {
+                throw new Error('Agent runner not initialized. Check server logs for startup errors.');
+            }
+        }
+
         // Ensure session exists
         try {
             const appName = 'finance-agent';
@@ -164,6 +177,7 @@ export class AgentService implements OnModuleInit {
             let lastText = '';
             let hadError = false;
 
+            // Iterate over the async iterable
             for await (const event of iterator) {
                 // Log event types for debugging (verbose)
                 this.logger.warn(`Received event: ${JSON.stringify(event)}`);
