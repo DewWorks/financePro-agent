@@ -132,14 +132,12 @@ export class AgentService implements OnModuleInit {
         this.logger.log(`Running agent | Session: ${sessionId} | Model: ${modelName} | Attempt: ${retryCount + 1}`);
 
         if (!this.runner) {
-            // Try to re-init if runner is missing (e.g. startup failed)
             this.initializeAgent();
             if (!this.runner) {
                 throw new Error('Agent runner not initialized. Check server logs for startup errors.');
             }
         }
 
-        // Ensure session exists
         try {
             const appName = 'finance-agent';
             const userId = 'user';
@@ -182,14 +180,30 @@ export class AgentService implements OnModuleInit {
                 // Log event types for debugging (verbose)
                 this.logger.warn(`Received event: ${JSON.stringify(event)}`);
 
-                // Check for error codes in the event stream (e.g. 404, 429)
+                // Check for error codes in the event stream
                 const errorCode = (event as any).errorCode;
                 if (errorCode) {
                     this.logger.warn(`Encountered error code ${errorCode} with model ${modelName}`);
                     hadError = true;
-                    break; // Stop processing this stream
+                    break;
                 }
 
+                // --- FIXED PARSING LOGIC START ---
+                // 1. Check for content in the event (ADK v0.3+ structure)
+                const content = (event as any).content;
+                if (content && content.parts) {
+                    const parts = content.parts;
+                    if (Array.isArray(parts)) {
+                        // If it's a model response, it usually has role='model'. 
+                        // We'll trust that any text content from the stream is part of the answer.
+                        const textParts = parts.filter((p: any) => p.text).map((p: any) => p.text).join('');
+                        if (textParts) {
+                            lastText = textParts;
+                        }
+                    }
+                }
+
+                // 2. Legacy/Alternative structure check (just in case)
                 if ((event as any).type === 'model_response') {
                     const response = (event as any).response;
                     if (response && response.content && response.content.parts) {
@@ -202,6 +216,7 @@ export class AgentService implements OnModuleInit {
                         }
                     }
                 }
+                // --- FIXED PARSING LOGIC END ---
             }
 
             if (hadError) {
@@ -223,9 +238,7 @@ export class AgentService implements OnModuleInit {
                 return "I'm sorry, I couldn't generate a response at this time.";
             }
 
-            // Try parsing as JSON if it looks like JSON
             const trimmed = lastText.trim();
-
             const cleanText = trimmed.replace(/^```json\s*/, '').replace(/\s*```$/, '');
             if ((cleanText.startsWith('{') && cleanText.endsWith('}')) || (cleanText.startsWith('[') && cleanText.endsWith(']'))) {
                 try {
@@ -240,7 +253,6 @@ export class AgentService implements OnModuleInit {
         } catch (e) {
             this.logger.error(`Error running agent with ${modelName}:`, e);
 
-            // If the error catch block is hit (exception thrown), also try fallback
             if (this.switchToNextModel()) {
                 this.logger.log(`Exception caught. Retrying request with new model...`);
                 return this.runAgent(sessionId, prompt, retryCount + 1);

@@ -40,8 +40,11 @@ let AgentService = AgentService_1 = class AgentService {
     initializeAgent() {
         const apiKey = this.configService.get('GEMINI_API_KEY');
         if (!apiKey) {
-            this.logger.error('GEMINI_API_KEY is missing!');
-            throw new Error('GEMINI_API_KEY is not defined in environment variables');
+            this.logger.error('GEMINI_API_KEY is missing! Agent functionality will be disabled.');
+            return;
+        }
+        if (this.currentModelIndex >= this.MODELS.length) {
+            this.currentModelIndex = 0;
         }
         const modelName = this.MODELS[this.currentModelIndex];
         this.logger.log(`Initializing AgentService with model: ${modelName}`);
@@ -114,6 +117,12 @@ let AgentService = AgentService_1 = class AgentService {
     async runAgent(sessionId, prompt, retryCount = 0) {
         const modelName = this.MODELS[this.currentModelIndex];
         this.logger.log(`Running agent | Session: ${sessionId} | Model: ${modelName} | Attempt: ${retryCount + 1}`);
+        if (!this.runner) {
+            this.initializeAgent();
+            if (!this.runner) {
+                throw new Error('Agent runner not initialized. Check server logs for startup errors.');
+            }
+        }
         try {
             const appName = 'finance-agent';
             const userId = 'user';
@@ -153,6 +162,16 @@ let AgentService = AgentService_1 = class AgentService {
                     this.logger.warn(`Encountered error code ${errorCode} with model ${modelName}`);
                     hadError = true;
                     break;
+                }
+                const content = event.content;
+                if (content && content.parts) {
+                    const parts = content.parts;
+                    if (Array.isArray(parts)) {
+                        const textParts = parts.filter((p) => p.text).map((p) => p.text).join('');
+                        if (textParts) {
+                            lastText = textParts;
+                        }
+                    }
                 }
                 if (event.type === 'model_response') {
                     const response = event.response;
