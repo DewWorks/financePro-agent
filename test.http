@@ -1,0 +1,32 @@
+### Test Chat Endpoint
+POST http://localhost:3000/agent/chat
+Content-Type: application/json
+
+{
+  "sessionId": "test-session-1",
+  "message": "Olá, sou o João. Tenho 30 anos e quero comprar um carro."
+}
+
+### Test Analysis Endpoint
+POST http://localhost:3000/agent/analyze
+Content-Type: application/json
+
+{
+  "period": "current_month",
+  "userProfile": {
+    "name": "João Silva",
+    "riskProfile": "moderate",
+    "age": 30
+  },
+  "financialContext": {
+    "monthlyIncome": 5000,
+    "transactions": [
+      { "description": "Salário", "amount": 5000, "date": "2023-10-01", "category": "Renda" },
+      { "description": "Aluguel", "amount": -1500, "date": "2023-10-05", "category": "Moradia" },
+      { "description": "Supermercado", "amount": -800, "date": "2023-10-10", "category": "Alimentação" }
+    ],
+    "activeGoals": [
+      { "name": "Carro Novo", "currentAmount": 5000, "targetAmount": 40000, "deadline": "2025-12-31" }
+    ]
+  }
+}
