@@ -1,7 +1,8 @@
 
 import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Gemini, LlmAgent, InMemoryRunner } from '@google/adk';
+import { Gemini, LlmAgent, InMemoryRunner, Runner } from '@google/adk';
+import { FirestoreSessionService } from './infrastructure/firestore-session.service';
 import { AnalysisRequestDto, AnalysisResponseDto } from './dto/analysis.dto';
 import { ChatRequestDto } from './dto/chat.dto';
 import { calculatorTool } from './tools/calculator.tool';
@@ -14,7 +15,7 @@ export class AgentService implements OnModuleInit {
     private readonly logger = new Logger(AgentService.name);
     private agent: LlmAgent;
     private model: Gemini;
-    private runner: InMemoryRunner;
+    private runner: Runner;
 
     // Priority list of models to try
     private readonly MODELS = [
@@ -70,10 +71,22 @@ export class AgentService implements OnModuleInit {
                 tools: [calculatorTool, getUserBalanceTool, addTransactionTool, getInvestmentOptionsTool],
             });
 
-            this.runner = new InMemoryRunner({
-                agent: this.agent,
-                appName: 'finance-agent',
-            });
+            const useFirestore = this.configService.get<string>('USE_FIRESTORE') === 'true';
+
+            if (useFirestore) {
+                this.logger.log('Initializing AgentService with Firestore persistence');
+                this.runner = new Runner({
+                    agent: this.agent,
+                    appName: 'finance-agent',
+                    sessionService: new FirestoreSessionService(),
+                });
+            } else {
+                this.logger.log('Initializing AgentService with In-Memory storage');
+                this.runner = new InMemoryRunner({
+                    agent: this.agent,
+                    appName: 'finance-agent',
+                });
+            }
 
             this.logger.log(`Agent initialized successfully with ${modelName}`);
         } catch (e) {
