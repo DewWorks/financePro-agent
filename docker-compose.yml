@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  finance-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      # Passa a chave da API do host se definida, ou lê do arquivo .env montado
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - USE_FIRESTORE=true
+      # Configurações para usar o Emulador local
+      - FIRESTORE_EMULATOR_HOST=firestore:8080
+      - GCLOUD_PROJECT=finance-agent-local
+      - PORT=3000
+    depends_on:
+      - firestore
+    # Monta o .env local para garantir que as variáveis existam
+    # volumes:
+    #   - ./.env:/app/.env
+
+  firestore:
+    image: gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators
+    # Inicia o emulador do Firestore na porta 8080
+    command: gcloud emulators firestore start --host-port=0.0.0.0:8080
+    ports:
+      - "8080:8080"
