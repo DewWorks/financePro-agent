@@ -5,7 +5,9 @@ import { Gemini, LlmAgent, InMemoryRunner } from '@google/adk';
 import { AnalysisRequestDto, AnalysisResponseDto } from './dto/analysis.dto';
 import { ChatRequestDto } from './dto/chat.dto';
 import { calculatorTool } from './tools/calculator.tool';
+import { getUserBalanceTool, addTransactionTool, getInvestmentOptionsTool } from './tools/finance.tool';
 import { Content } from '@google/genai';
+import { AgentHelper } from './agent.helper';
 
 @Injectable()
 export class AgentService implements OnModuleInit {
@@ -56,18 +58,16 @@ export class AgentService implements OnModuleInit {
             this.agent = new LlmAgent({
                 name: 'financeExpert',
                 model: this.model,
-                instruction: `You are a senior financial analyst and expert consultant for FinanceApp.
-            Your goal is to provide pragmatic, safe, and personalized financial advice.
+                instruction: `You are FinancePro, a connected financial assistant.
             
-            PRINCIPLES:
-            1. DO NOT JUDGE: Be empathetic but firm about financial goals.
-            2. SAFETY FIRST: Never recommend high-risk investments without clear warnings.
-            3. GOAL ORIENTED: Always relate current spending to future goals.
-            4. ACCURACY: Use the calculator tool for ANY mathematical operation. Do not calculate mentally.
+            CORE RULES:
+            1. BE CONCISE. Responses must be short (max 2-3 sentences) unless deeply analyzing.
+            2. USE TOOLS. detailed math? Use 'calculator'. Asking about money? Use 'getUserBalance'. Spending? Use 'addTransaction'.
+            3. NO LISTS. Do not output bullet points unless explicitly asked.
+            4. ACT, DON'T PREACH. If the user says "I spent 50", log it immediately using the tool. Don't ask "did you mean...".
             
-            When analyzing data, look for patterns, spending spikes, and opportunities to save.
-            Structure your response in JSON format matching the AnalysisResponse schema when requested.`,
-                tools: [calculatorTool],
+            Persona: Professional, direct, efficient.`,
+                tools: [calculatorTool, getUserBalanceTool, addTransactionTool, getInvestmentOptionsTool],
             });
 
             this.runner = new InMemoryRunner({
@@ -188,35 +188,11 @@ export class AgentService implements OnModuleInit {
                     break;
                 }
 
-                // --- FIXED PARSING LOGIC START ---
-                // 1. Check for content in the event (ADK v0.3+ structure)
-                const content = (event as any).content;
-                if (content && content.parts) {
-                    const parts = content.parts;
-                    if (Array.isArray(parts)) {
-                        // If it's a model response, it usually has role='model'. 
-                        // We'll trust that any text content from the stream is part of the answer.
-                        const textParts = parts.filter((p: any) => p.text).map((p: any) => p.text).join('');
-                        if (textParts) {
-                            lastText = textParts;
-                        }
-                    }
+                // USE HELPER FOR PARSING
+                const parsedText = AgentHelper.parseEventExample(event);
+                if (parsedText) {
+                    lastText = parsedText;
                 }
-
-                // 2. Legacy/Alternative structure check (just in case)
-                if ((event as any).type === 'model_response') {
-                    const response = (event as any).response;
-                    if (response && response.content && response.content.parts) {
-                        const parts = response.content.parts;
-                        if (Array.isArray(parts)) {
-                            const textParts = parts.filter((p: any) => p.text).map((p: any) => p.text).join('');
-                            if (textParts) {
-                                lastText = textParts;
-                            }
-                        }
-                    }
-                }
-                // --- FIXED PARSING LOGIC END ---
             }
 
             if (hadError) {
@@ -238,17 +214,8 @@ export class AgentService implements OnModuleInit {
                 return "I'm sorry, I couldn't generate a response at this time.";
             }
 
-            const trimmed = lastText.trim();
-            const cleanText = trimmed.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-            if ((cleanText.startsWith('{') && cleanText.endsWith('}')) || (cleanText.startsWith('[') && cleanText.endsWith(']'))) {
-                try {
-                    return JSON.parse(cleanText);
-                } catch {
-                    this.logger.warn('Failed to parse JSON response, returning raw text');
-                }
-            }
-
-            return lastText;
+            // USE HELPER FOR JSON PARSING
+            return AgentHelper.safeJsonParse(lastText);
 
         } catch (e) {
             this.logger.error(`Error running agent with ${modelName}:`, e);
