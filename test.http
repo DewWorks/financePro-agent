@@ -1,14 +1,25 @@
-### Test Chat Endpoint
-POST http://localhost:3000/agent/chat
+### Test Chat Endpoint (Docker - Port 3001)
+# 1. First request: Introduce yourself
+POST http://localhost:3001/agent/chat
 Content-Type: application/json
 
 {
-  "sessionId": "test-session-1",
-  "message": "Olá, sou o João. Tenho 30 anos e quero comprar um carro."
+  "sessionId": "docker-test-session",
+  "message": "Olá, meu nome é João Financeiro."
 }
 
-### Test Analysis Endpoint
-POST http://localhost:3000/agent/analyze
+### Test Persistence
+# 2. Second request: Ask for the name (Should return "João Financeiro" if persistence works)
+POST http://localhost:3001/agent/chat
+Content-Type: application/json
+
+{
+  "sessionId": "docker-test-session",
+  "message": "Qual é o meu nome?"
+}
+
+### Test Analysis Endpoint (Docker - Port 3001)
+POST http://localhost:3001/agent/analyze
 Content-Type: application/json
 
 {

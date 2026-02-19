@@ -6,7 +6,7 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "3000:3000"
+      - "3001:3000"
     environment:
       # Passa a chave da API do host se definida, ou lê do arquivo .env montado
       - GEMINI_API_KEY=${GEMINI_API_KEY}
@@ -26,4 +26,4 @@ services:
     # Inicia o emulador do Firestore na porta 8080
     command: gcloud emulators firestore start --host-port=0.0.0.0:8080
     ports:
-      - "8080:8080"
+      - "8085:8080"
